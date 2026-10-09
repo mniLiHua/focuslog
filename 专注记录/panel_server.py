@@ -60,14 +60,41 @@ _COLLECT_CACHE = {"key": None, "data": None}   # collect() 结果，按"日志�
 _WIN_CACHE = {"ver": None, "data": {}}         # 窗口排行结果：ver=日志版本，data[key|agg|min]=rows
 
 
-def _windows_cached(key, agg, min_sec):
-    """排行结果缓存：数据版本没变时，切范围/切聚合/切门槛都是瞬时返回
+_WIN_REBUILDING = {"keys": set(), "t": 0.0}
 
-    用户反馈"排行切换有点慢"：每次切换都要把窗口重新聚合一遍（按进程聚合
-    尤其贵）。数据版本（_collect_key）没变时结果必然一样，直接复用。
-    """
+
+def _windows_rebuild(ver, cks):
+    """后台重算（stale-while-revalidate 的 revalidate 半边，带节流）"""
+    for ck in cks:
+        key, agg_s, min_s = ck.split("|")
+        try:
+            r = windows_payload(key, agg=(agg_s != "0"), min_sec=int(min_s))
+            if _WIN_CACHE["ver"] != ver:                     # 期间数据又变了就放弃
+                return
+            _WIN_CACHE["data"][ck] = r
+        except Exception:                                    # noqa: BLE001
+            continue
+
+
+def _windows_cached(key, agg, min_sec):
+    """排行结果缓存：数据版本没变 → 瞬时返回；
+    版本变了 → 先给上一版结果（标记 stale，前端 1.5s 后静默刷新），
+    后台重算。用户从此感知不到重算等待。"""
     ver = _collect_key()
     if ver != _WIN_CACHE["ver"]:
+        if _WIN_CACHE["data"]:
+            # 有旧版数据：把全部旧 key 排进后台重算队列（带节流，30s 一轮）
+            now = time.time()
+            olds = list(_WIN_CACHE["data"].keys())
+            if now - _WIN_REBUILDING["t"] > 30:
+                _WIN_REBUILDING["t"] = now
+                threading.Thread(target=_windows_rebuild,
+                                 args=(ver, olds), daemon=True).start()
+            ck = f"{key}|{int(agg)}|{min_sec}"
+            if ck in _WIN_CACHE["data"]:
+                r = dict(_WIN_CACHE["data"][ck])
+                r["stale"] = True
+                return r
         _WIN_CACHE["ver"], _WIN_CACHE["data"] = ver, {}
     ck = f"{key}|{agg}|{min_sec}"
     if ck in _WIN_CACHE["data"]:
@@ -75,6 +102,16 @@ def _windows_cached(key, agg, min_sec):
     r = windows_payload(key, agg=agg, min_sec=min_sec)
     _WIN_CACHE["data"][ck] = r
     return r
+
+
+def _windows_warmup():
+    """启动预热：把用户最常用的排行组合算好（打开网页必命中）"""
+    try:
+        for key in ("d7", "d30", "all", "today"):
+            for agg, mn in ((True, 900), (False, 900)):
+                _windows_cached(key, agg, mn)
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 def _collect_key():
@@ -1299,7 +1336,8 @@ def main():
     threading.Thread(
         target=lambda: (
             _collect_cached(),
-            print("  数据预热完成，面板秒开。"),
+            _windows_warmup(),
+            print("  数据预热完成（含窗口排行），面板秒开。"),
         ), daemon=True).start()
     try:
         httpd.serve_forever()
