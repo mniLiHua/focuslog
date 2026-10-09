@@ -1,0 +1,1 @@
+perf(presets): 窗口排行预热常用组合 + stale-while-revalidate（数据版本变化先回旧数据标记 stale、后台重算，前端 1.5s 静默换新）—— 排行打开等待感知归零

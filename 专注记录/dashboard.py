@@ -763,6 +763,15 @@ function refreshTop(){
     .then(r => {
       topCache[ck] = r.items || [];
       topRows = topCache[ck]; topPage = 0; renderTop();
+      if (r.stale)                                           // 服务端给的是旧数据：稍后静默换新
+        setTimeout(() => {
+          if (topKey === ck) fetch('/api/windows?range=' + encodeURIComponent(view)
+            + '&agg=' + topAgg + '&min=' + topMin)
+            .then(x => x.json())
+            .then(r2 => { if (!r2.stale){ topCache[ck] = r2.items || [];
+              if (topKey === ck){ topRows = topCache[ck]; renderTop(); } } })
+            .catch(() => {});
+        }, 1500);
     })
     .catch(() => { topRows = []; renderTop(); });
 }
