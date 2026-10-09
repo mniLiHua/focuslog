@@ -51,6 +51,11 @@ import backup_utils as BU  # noqa: E402
 # 仍会在 47823~47832 内顺延找空位（见 main）。
 DEFAULT_PORT = 47823
 AUTHOR = "冰叁狼"          # 作者署名：启动横幅 / README / CHANGELOG / 面板页脚
+try:
+    LOCAL_VERSION = io.open(os.path.join(os.path.dirname(SCRIPT_DIR),
+                                         "VERSION.txt"), encoding="utf-8").read().strip()
+except OSError:
+    LOCAL_VERSION = "dev"
 
 # 监控进程与备份目录（供网页里的"开始/停止记录""备份数据"用）
 TRACKER_EXE = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "焦点监控", "focus_tracker.exe"))
@@ -1251,17 +1256,18 @@ def main():
         with _op.open(f"http://127.0.0.1:{DEFAULT_PORT}/",
                       timeout=5) as _r:
             body = _r.read().decode("utf-8", "replace")
-            fresh = "btnCheckup" in body                     # 新版页面的独有标志
-        if _r.status == 200 and fresh:
-            print(f"  面板已经在运行（端口 {DEFAULT_PORT}），直接帮你打开。")
-            print("  [本次窗口结束] —— 面板服务仍在后台运行，放心关闭本窗口。")
-            if not no_open:
-                webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}/")
-            return 0
-        if _r.status == 200 and not fresh:
-            # 占着端口的是【修复前的旧版面板】=> 页面本身是坏的，复用它只会继续白屏。
+        if _r.status == 200:
+            # 版本校验：占位实例的版本必须与本 exe 一致，否则"更新了没生效"
+            stale = "btnCheckup" not in body or f"v{LOCAL_VERSION}" not in body
+            if not stale:
+                print(f"  面板已经在运行（端口 {DEFAULT_PORT}，v{LOCAL_VERSION}），直接帮你打开。")
+                print("  [本次窗口结束] —— 面板服务仍在后台运行，放心关闭本窗口。")
+                if not no_open:
+                    webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}/")
+                return 0
+            # 占着端口的是【旧版本面板】⇒ 页面可能不完整/功能缺失。
             # 自愈：结束旧进程，落到下面的正常启动（新版）。
-            print("  检测到旧版面板占着端口，自动重启为新版…")
+            print("  检测到旧版本面板占着端口，自动重启为新版…")
             subprocess.run(["taskkill", "/IM", "focuspanel.exe", "/F"],
                            capture_output=True)
             time.sleep(1.5)
