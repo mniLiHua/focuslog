@@ -1332,13 +1332,17 @@ def main():
                 time.sleep(0.5)
         if no_open:
             return
-        # TUN / 系统代理环境抗干扰：优先 Chrome --app 独立窗口直连
-        # （绕开系统代理 + 时间戳防缓存 + 不污染日常标签页），找不到再退默认浏览器
+        # TUN / 系统代理环境抗干扰：优先 Chromium 系浏览器 --app 独立窗口直连
+        # （绕开系统代理 + 时间戳防缓存 + 不污染日常标签页）。
+        # Chrome 优先，没装就试 Edge（Win10/11 自带，同样支持 --app），最后才退默认浏览器。
         u = url + "?t=" + str(int(time.time()))
+        _la = os.environ.get("LOCALAPPDATA") or ""
         for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                   r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                  os.path.join(os.environ.get("LOCALAPPDATA") or "",
-                               "Google", "Chrome", "Application", "chrome.exe")):
+                  os.path.join(_la, "Google", "Chrome", "Application", "chrome.exe"),
+                  r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                  r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                  os.path.join(_la, "Microsoft", "Edge", "Application", "msedge.exe")):
             try:
                 if c and os.path.exists(c):
                     subprocess.Popen([c, "--app=" + u, "--proxy-server=direct://"])
