@@ -39,3 +39,4 @@
 
 # ----- 系统 (非专注) — 放最后兜底 -----
 系统|proc=explorer.exe,proc=SearchUI.exe,proc=Taskmgr.exe,proc=cmd.exe,proc=WindowsTerminal.exe,proc=LockApp.exe,proc=ApplicationFrameHost.exe,proc=java.exe,proc=python.exe,proc=pythonw.exe,proc=ShellExperienceHost.exe,proc=HipsTray.exe,proc=GHelper.exe,proc=System Idle Process,proc=[RESUME],title=自动恢复,title=G-Helper,title=网络连接
+

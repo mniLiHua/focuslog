@@ -1,0 +1,1 @@
+feat(presets): 方案专区两段式增量导入 —— 预览(新增/冲突/互斥/PII检测)后确认，只导入用户没有的规则；内置方案一键解析；补 panel_server import re（PII_RE 致启动崩溃）；API 实测通过
