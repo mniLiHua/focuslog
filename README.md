@@ -104,6 +104,11 @@ focuslog\
 Python + PyInstaller 有约 40MB 的进程地板价，以上数字已贴近地板。
 页面打开速度：整页 HTML 与排行结果按"数据版本"缓存，实测 **15–70ms**。
 
+## 反馈问题
+
+遇到 Bug 或想提建议：到 [Issues](https://github.com/mniLiHua/focuslog/issues) 发帖，
+附上面板「工具 → 一键体检」的截图 + 你的 Windows 版本，通常一轮就能定位。
+
 ## 开源协议
 
 本项目以 [GPL-3.0](LICENSE) 协议开源 —— 可自由使用、修改、再分发；

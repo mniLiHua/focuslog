@@ -1370,6 +1370,9 @@ async function loadAbout(){
       <tr><td><b>数据目录</b></td><td style="word-break:break-all">${esc(r.data_dir)}</td></tr>
       <tr><td><b>面板地址</b></td><td>http://127.0.0.1:${r.port}/（本机）</td></tr>
       <tr><td><b>已记录</b></td><td>${r.days} 天</td></tr>
+      <tr><td><b>项目地址</b></td>
+        <td><a href="https://github.com/mniLiHua/focuslog" target="_blank" style="color:var(--accent)">github.com/mniLiHua/focuslog</a>
+          <div class="tip">遇到问题：先点「一键体检」，把 ❌ 项截图，到仓库 Issues 里发帖，附上截图与系统版本即可</div></td></tr>
       <tr><td><b>常见问题</b></td><td class="tip" style="line-height:1.9">
         · 数据不联网，全部在数据目录的纯文本里<br>
         · 记录停了？顶部状态条或体检里一键开始<br>
