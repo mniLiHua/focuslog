@@ -35,6 +35,7 @@ import atexit
 import psutil
 from category_utils import load_categories, is_focus_window
 import backup_utils
+import backup_utils
 
 # ============ 配置 ============
 if getattr(sys, "frozen", False):
@@ -456,57 +457,37 @@ def check_goals(focus_seconds, state, goals):
                         "（不想要这类提醒：面板 → ⚙ 工具 → 系统设置 → 关掉「弹窗提醒」）")
 
 def run_daily_maintenance(log_file, time_str):
-    """跨天自动维护：归档 → 重算深耕 → 导出统计
+    """跨天自动维护：归档 → 重算深耕 → 导出统计（+周一自动周报）
 
-    ⚠️ 两条路径都必须调用（曾经只挂在「循环中发现跨天」上，而**开机自启**走的是
-    「启动时发现跨天」那条 —— 结果最常见的场景反而不触发自动化）。
-    三步都幂等；失败必须留痕，否则「到底跑没跑」无从判断。
+    v3.1.0：改为派发独立 summary 进程（--maintain）跑完即退。
+    为什么：此前在本进程内 import summary 全家（含图表/统计），只为一年
+    几次的维护就常驻 ~25MB 内存；子进程化后常驻内存立减。
+    输出落 专注记录\maintenance.log；失败不影响记录。
     """
     try:
-        # ⚠️ GUI exe（--noconsole）里 sys.stdout/stderr 是 None，
-        # 而被调模块顶部会用 sys.stdout.reconfigure / .buffer ⇒ 必须先兜住
-        if sys.stdout is None:
-            sys.stdout = io.StringIO()
-        if sys.stderr is None:
-            sys.stderr = io.StringIO()
-        if LOG_DIR not in sys.path:
-            sys.path.insert(0, LOG_DIR)
-        import summary as _summary
-        with contextlib.redirect_stdout(io.StringIO()):
-            n_month = _summary.archive_old_months()
-            _summary.renew_focus_records()
-            _summary.export_all()
-        write_log(log_file, f"{time_str}|[MAINTAIN]|跨天自动维护完成（归档 {n_month} 个月）\n")        # v3.0.0：每周自动备份（backup_config.json 里 enabled 时）
-        try:
-            msg = backup_utils.run_if_due()
-            if msg:
-                write_log(log_file, f"{time_str}|{msg}\n")
-        except Exception:
-            pass
-        # 周一顺手出一份上周报告（失败不影响别的）
-        try:
-            if datetime.date.today().weekday() == 0:
-                import importlib.util as _ilu
-                wp = os.path.normpath(os.path.join(LOG_DIR, "..", "工具", "weekly_report.py"))
-                spec = _ilu.spec_from_file_location("fl_weekly", wp)
-                mod = _ilu.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                with contextlib.redirect_stdout(io.StringIO()):
-                    mod.build_report()
-                write_log(log_file, f"{time_str}|[WEEKLY]|上周报告已生成\n")
-        except Exception:                                    # noqa: BLE001
-            pass
-        return True
+        if getattr(sys, "frozen", False):
+            m_exe = os.path.normpath(os.path.join(
+                os.path.dirname(os.path.abspath(sys.executable)),
+                "..", "专注记录", "summary.exe"))
+            cmd = [m_exe, "--maintain"]
+        else:
+            cmd = [sys.executable,
+                   os.path.normpath(os.path.join(LOG_DIR, "summary.py")),
+                   "--maintain"]
+        mlog = open(os.path.join(LOG_DIR, "maintenance.log"), "a", encoding="utf-8")
+        mlog.write(f"\n===== {time_str} 跨天维护 =====\n")
+        subprocess.Popen(cmd, cwd=LOG_DIR, stdout=mlog, stderr=subprocess.STDOUT)
+        mlog.close()
+        write_log(log_file, f"{time_str}|[MAINTAIN]|跨天维护已派发后台进程\n")
     except Exception as e:                                   # noqa: BLE001
-        import traceback as _tb
-        write_log(log_file, f"{time_str}|[MAINTAIN-FAIL]|{type(e).__name__}: {e}\n")
-        try:
-            write_log(log_file,
-                      f"{time_str}|[MAINTAIN-FAIL]|{_tb.format_exc().strip().splitlines()[-1]}\n")
-        except Exception:                                    # noqa: BLE001
-            pass
-        return False
-
+        write_log(log_file, f"{time_str}|[MAINTAIN]|派发失败 {e}\n")
+    # v3.0.0：每周自动备份（backup_config.json 里 enabled 时）
+    try:
+        msg = backup_utils.run_if_due()
+        if msg:
+            write_log(log_file, f"{time_str}|{msg}\n")
+    except Exception:                                        # noqa: BLE001
+        pass
 
 def main():
     """主循环，含鼠标空闲自动暂停、专注统计、里程碑、实时文件更新"""
