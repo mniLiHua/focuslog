@@ -1164,6 +1164,25 @@ def main():
         if arg == "--renew-all":
             renew_focus_records(include_archived=True)
             return
+        if arg == "--maintain":
+            # 子进程维护入口：归档 → 重算深耕 → 导出统计（+周一自动周报）
+            # 由记录进程跨天时派发，输出全部落 maintenance.log 供排查
+            archive_old_months()
+            renew_focus_records()
+            export_all()
+            import datetime as _dt
+            if _dt.date.today().weekday() == 0:
+                try:
+                    import importlib.util as _ilu
+                    wp = os.path.normpath(os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)),
+                        "..", "工具", "weekly_report.py"))
+                    spec = _ilu.spec_from_file_location("fl_weekly", wp)
+                    m = _ilu.module_from_spec(spec)
+                    spec.loader.exec_module(m)
+                except Exception as e:                       # noqa: BLE001
+                    print(f"[周报失败] {e}")
+            return
         if arg == "--rank":
             rank_menu()
             return
