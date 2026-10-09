@@ -716,9 +716,20 @@ def about_payload(payload=None):
     except OSError:
         ver = "?"
     cfg = BU.load_cfg()
+    mem = ""
+    try:
+        import psutil
+        rows = []
+        for pr in psutil.process_iter(["name", "memory_info"]):
+            nm = (pr.info.get("name") or "").lower()
+            if nm in ("focuspanel.exe", "focus_tracker.exe"):
+                rows.append(f"{nm}: {pr.info['memory_info'].private / 1048576:.0f} MB")
+        mem = "；".join(rows)
+    except Exception:                                        # noqa: BLE001
+        pass
     return {"ok": True, "version": ver, "author": AUTHOR,
             "data_dir": SCRIPT_DIR, "port": DEFAULT_PORT,
-            "days": len(S._find_all_log_dates()),
+            "days": len(S._find_all_log_dates()), "memory": mem,
             "backup": {"enabled": bool(cfg.get("enabled")),
                        "dir": cfg.get("dir") or BU.default_dir(),
                        "interval_days": cfg.get("interval_days") or 7,
