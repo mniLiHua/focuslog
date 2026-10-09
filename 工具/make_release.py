@@ -45,7 +45,8 @@ TOOLS = ("更新.ps1", "migrate.py", "weekly_report.py",
 
 def read_version():
     p = os.path.join(ROOT, "VERSION.txt")
-    return io.open(p, encoding="utf-8").read().strip() or "0.0.0"
+    # \ufeff 兜底：文件若被 PowerShell Set-Content -Encoding UTF8 重写会带 BOM
+    return io.open(p, encoding="utf-8-sig").read().replace("\ufeff", "").strip() or "0.0.0"
 
 
 def clean_category(src, dst):
