@@ -98,13 +98,20 @@ def _collect_key():
     return hash(tuple(items))
 
 
+_COLLECT_LOCK = __import__("threading").Lock()
+
+
 def _collect_cached():
+    """预热线程与首个请求可能同时到达 ⇒ 无锁会各算一遍（2 倍 CPU，用户看到"没秒开"）。
+
+    锁内二次检查：谁先拿到锁谁算，另一个直接命中。"""
     k = _collect_key()
-    if k is not None and _COLLECT_CACHE["data"] is not None and _COLLECT_CACHE["key"] == k:
-        return _COLLECT_CACHE["data"]
-    data = DASH.collect()
-    _COLLECT_CACHE["key"], _COLLECT_CACHE["data"] = k, data
-    return data
+    with _COLLECT_LOCK:
+        if k is not None and _COLLECT_CACHE["data"] is not None and _COLLECT_CACHE["key"] == k:
+            return _COLLECT_CACHE["data"]
+        data = DASH.collect()
+        _COLLECT_CACHE["key"], _COLLECT_CACHE["data"] = k, data
+        return data
 
 # 控制台可能是 GBK：打不出的字符直接替换，别让启动横幅把服务带崩
 if hasattr(sys.stdout, "reconfigure"):
@@ -795,6 +802,85 @@ def preset_apply(payload):
                        + ("；新分类已创建" if cat_new else "")}
 
 
+PRESET_REG = os.path.join(SCRIPT_DIR, "preset_registry.json")
+
+
+def _reg_load():
+    try:
+        return json.load(io.open(PRESET_REG, encoding="utf-8"))
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
+def _reg_save(reg):
+    json.dump(reg, io.open(PRESET_REG, "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)
+
+
+def preset_enable(payload):
+    """启用方案 = 增量导入其未拥有规则，并记录"本包贡献了哪些规则"（供停用精准撤回）"""
+    name = str(payload.get("name") or "").strip()
+    if not name or "/" in name or ".." in name:
+        return {"ok": False, "message": "无效方案名"}
+    fp = os.path.join(PRESET_DIR, name)
+    if not os.path.isfile(fp):
+        return {"ok": False, "message": f"分类方案目录里没有 {name}"}
+    scan = preset_scan({"name": name})
+    if not scan.get("ok"):
+        return {"ok": False, "message": scan.get("message", "解析失败")}
+    reg = _reg_load()
+    cats = S.load_categories(DASH.CAT_FILE)
+    applied = []
+    for a in scan["add"]:
+        cat, rule = a["cat"], a["rule"]
+        k, v = rule.split("=", 1)
+        try:
+            if S._append_category_rule(cat, v, is_new=cat not in cats,
+                                       is_focus=bool(a.get("focus"))):
+                applied.append(rule)
+                cats.setdefault(cat, [])
+        except Exception:                                    # noqa: BLE001
+            continue
+    reg[name] = sorted(set(reg.get(name, []) + applied))
+    _reg_save(reg)
+    return {"ok": True, "applied": applied,
+            "message": f"已启用 {name}：新增 {len(applied)} 条规则"
+                       + ("（本方案与你的现状完全一致，无需新增）" if not applied else "")}
+
+
+def preset_disable(payload):
+    """停用方案 = 只移除该包此前贡献的规则（你后来手工加的、别的包贡献的一律不动）"""
+    name = str(payload.get("name") or "").strip()
+    reg = _reg_load()
+    rules = reg.get(name) or []
+    if not rules:
+        return {"ok": True, "message": f"{name} 没有已启用的规则记录，无需停用"}
+    catp = DASH.CAT_FILE
+    lines = io.open(catp, encoding="utf-8").read().split("\n")
+    n = 0
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if not s or s.startswith("#") or "|" not in s:
+            continue
+        for r in rules:
+            token = "," + r
+            if token in ln:
+                ln = ln.replace(token, "")
+                n += 1
+        lines[i] = ln.rstrip(",")
+    lines = [l for l in lines
+             if not re.match(r"^(#专注#)?[^||#]+\|\s*$", l.strip())]
+    io.open(catp, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
+    reg.pop(name, None)
+    _reg_save(reg)
+    return {"ok": True, "message": f"已停用 {name}：移除其贡献的 {n} 条规则"
+                                   "（你自己的规则全部保留）"}
+
+
+def preset_status(payload=None):
+    return {"ok": True, "registry": _reg_load()}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "FocusLogPanel/2.9"
 
@@ -936,6 +1022,23 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:                       # noqa: BLE001
                 return self._send(500, {"ok": False,
                                         "message": f"{type(e).__name__}: {e}"})
+
+        if path == "/api/preset_enable":
+            try:
+                return self._send(200, preset_enable(payload))
+            except Exception as e:                       # noqa: BLE001
+                return self._send(500, {"ok": False,
+                                        "message": f"{type(e).__name__}: {e}"})
+
+        if path == "/api/preset_disable":
+            try:
+                return self._send(200, preset_disable(payload))
+            except Exception as e:                       # noqa: BLE001
+                return self._send(500, {"ok": False,
+                                        "message": f"{type(e).__name__}: {e}"})
+
+        if path == "/api/preset_status":
+            return self._send(200, preset_status(payload))
 
         if path == "/api/presets_list":
             return self._send(200, presets_list())

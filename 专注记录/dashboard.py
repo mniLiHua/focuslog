@@ -453,6 +453,8 @@ HTML = r"""<!DOCTYPE html>
         <select id="presetSel" style="min-width:200px"><option value="">—— 选择内置方案 ——</option></select>
         <button class="btn" id="btnPresetLoad">载入选中方案</button>
         <button class="btn primary" id="btnPresetScan">解析预览</button>
+        <button class="btn" id="btnPresetEnable">启用（增量补规则）</button>
+        <button class="btn" id="btnPresetDisable">停用（移除该包规则）</button>
         <button class="btn primary" id="btnPresetApply" disabled>只导入新增项</button>
       </div>
       <textarea id="presetText" style="width:100%;min-height:150px;margin-top:8px;
@@ -1280,11 +1282,15 @@ async function loadPresetList(){
   if (!SERVER) return;
   const sel = document.getElementById('presetSel');
   sel.innerHTML = '<option value="">—— 选择内置方案 ——</option>';
+  let reg = {};
   try {
+    const st = await fetch('/api/preset_status').then(x => x.json());
+    reg = st.registry || {};
     const r = await fetch('/api/presets_list').then(x => x.json());
     (r.items || []).forEach(f => {
       const o = document.createElement('option');
-      o.value = f; o.textContent = f;
+      o.value = f;
+      o.textContent = f + (reg[f] ? `（已启用 · ${reg[f].length} 条）` : '');
       sel.appendChild(o);
     });
   } catch(e){}
@@ -1296,6 +1302,26 @@ document.getElementById('btnPresetLoad').onclick = async () => {
 };
 document.getElementById('btnPresetScan').onclick = () => presetPreview(
   {text: document.getElementById('presetText').value});
+document.getElementById('btnPresetEnable').onclick = async (e) => {
+  const v = document.getElementById('presetSel').value;
+  if (!v){ out.textContent = '先选择一个方案'; return; }
+  e.target.disabled = true;
+  try {
+    const r = await api('/api/preset_enable', {name: v});
+    out.textContent = r.message || '';
+    await loadPresetList();
+  } finally { e.target.disabled = false; }
+};
+document.getElementById('btnPresetDisable').onclick = async (e) => {
+  const v = document.getElementById('presetSel').value;
+  if (!v){ out.textContent = '先选择一个方案'; return; }
+  e.target.disabled = true;
+  try {
+    const r = await api('/api/preset_disable', {name: v});
+    out.textContent = r.message || '';
+    await loadPresetList();
+  } finally { e.target.disabled = false; }
+};
 document.getElementById('btnPresetApply').onclick = async (e) => {
   if (!PRESET_LAST || !PRESET_LAST.add || !PRESET_LAST.add.length) return;
   e.target.disabled = true;
