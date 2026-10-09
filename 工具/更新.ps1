@@ -112,9 +112,17 @@ foreach ($d in @('专注记录', '焦点监控')) {
     if (Test-Path $from) {
         $to = Join-Path $bak $d
         New-Item -ItemType Directory -Path $to -Force | Out-Null
-        Get-ChildItem $from -File | Where-Object { $_.Extension -in '.py', '.bat', '.exe' } |
+        Get-ChildItem $from -File | Where-Object { $_.Extension -in '.py', '.bat', '.exe', '.ps1' } |
             ForEach-Object { Copy-Item $_.FullName $to -Force }
     }
+}
+# 分类方案只有 .txt（category.txt 绝不能被模板覆盖，所以 .txt 只对这个目录生效）
+$pdir = Join-Path $Root '分类方案'
+if (Test-Path $pdir) {
+    $pto = Join-Path $bak '分类方案'
+    New-Item -ItemType Directory -Path $pto -Force | Out-Null
+    Get-ChildItem $pdir -File | Where-Object { $_.Extension -eq '.txt' } |
+        ForEach-Object { Copy-Item $_.FullName $pto -Force }
 }
 
 # 4) overwrite program files only (a locked exe is skipped, not fatal)
@@ -125,12 +133,23 @@ foreach ($d in @('专注记录', '焦点监控')) {
     $from = Join-Path $src $d
     if (Test-Path $from) {
         New-Item -ItemType Directory -Path $to -Force | Out-Null
-        Get-ChildItem $from -File | Where-Object { $_.Extension -in '.py', '.bat', '.exe' } |
+        Get-ChildItem $from -File | Where-Object { $_.Extension -in '.py', '.bat', '.exe', '.ps1' } |
             ForEach-Object {
                 try { Copy-Item $_.FullName (Join-Path $to $_.Name) -Force -ErrorAction Stop }
                 catch { $locked += $_.Name }
             }
     }
+}
+# 分类方案：只合入 .txt 方案文件（用户自建的方案文件保留，同名才覆盖）
+$pt = Join-Path $Root '分类方案'
+$pf = Join-Path $src '分类方案'
+if (Test-Path $pf) {
+    New-Item -ItemType Directory -Path $pt -Force | Out-Null
+    Get-ChildItem $pf -File | Where-Object { $_.Extension -eq '.txt' } |
+        ForEach-Object {
+            try { Copy-Item $_.FullName (Join-Path $pt $_.Name) -Force -ErrorAction Stop }
+            catch { $locked += $_.Name }
+        }
 }
 $docsFrom = Join-Path $src 'docs'
 if (Test-Path $docsFrom) { try { Copy-Item $docsFrom (Join-Path $Root 'docs') -Recurse -Force -ErrorAction Stop } catch { } }

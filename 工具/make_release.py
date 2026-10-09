@@ -3,7 +3,7 @@
 # 本程序按 GPL-3.0 授权：可自由使用/修改/再分发，衍生作品须同协议开源。
 # -*- coding: utf-8 -*-
 r"""
-打发布包  v2.9.1
+打发布包  v3.2.0
     python 工具\make_release.py
 
 产出 `_release\FocusLog_vX.Y.Z.zip`：程序 + 文档 + exe + 空数据骨架，
@@ -39,7 +39,7 @@ EMPTY_DIRS = ("归档", "深耕记录", "时长统计")
 # 普通用户最常用的入口直接放包根目录（子目录只留程序与数据）
 ROOT_BATS = ("打开面板.bat", "开始记录.bat", "更新.bat", "使用说明.txt")
 # 进阶入口随包一起发（朋友也可能想"只看快照"/"手动设自启"），开发用的 build/打包 不发
-TOOLS = ("更新.ps1", "migrate.py", "weekly_report.py",
+TOOLS = ("更新.ps1", "清理旧版.ps1", "migrate.py", "weekly_report.py",
          "面板（快照）.bat", "取消自启.bat", "停止监控.bat", "迁移旧数据.bat")
 
 
@@ -98,6 +98,14 @@ def build():
         p = os.path.join(ROOT, "工具", fn)
         if os.path.exists(p):
             shutil.copy2(p, os.path.join(dst_tools, fn))
+    # 分类方案（面板"方案专区"的数据源；README.md 属 GitHub 视角，不进包）
+    dst_pre = os.path.join(stage, "分类方案")
+    os.makedirs(dst_pre)
+    pre_dir = os.path.join(ROOT, "分类方案")
+    for fn in sorted(os.listdir(pre_dir)):
+        if fn.endswith(".txt"):
+            shutil.copy2(os.path.join(pre_dir, fn), os.path.join(dst_pre, fn))
+
     clean_category(os.path.join(FL, "category.txt"), os.path.join(dst_fl, "category.txt"))
     for d in EMPTY_DIRS:
         os.makedirs(os.path.join(dst_fl, d), exist_ok=True)
