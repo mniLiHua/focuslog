@@ -3,7 +3,7 @@
 > **本地 Windows 时间记录**：你在电脑上做了什么、专注了多久，一目了然。
 > 纯本地 · 零依赖（朋友免装 Python，双击就用）· 数据不联网不上传 · 全中文界面
 
-![version](https://img.shields.io/badge/version-3.0.0-4CAF50) ![license](https://img.shields.io/badge/license-GPL--3.0-blue) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![version](https://img.shields.io/badge/version-3.1.1-4CAF50) ![license](https://img.shields.io/badge/license-GPL--3.0-blue) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
 **作者：冰叁狼（GitHub: [mniLiHua](https://github.com/mniLiHua)）**
 
@@ -54,7 +54,7 @@
 focuslog\
   打开面板.bat        ← 日常入口（看数据 + 所有开关）
   开始记录.bat        ← 开始记录 + 设开机自启（一步到位）
-  更新.bat            ← 在线升级（仓库公开后可用）
+  更新.bat            ← 一键在线升级（自动比对版本号，已是最新直接跳过；无需 GitHub 账号）
   使用说明.txt        ← 纯文本新手指南
   VERSION.txt
   焦点监控\           记录进程与共享模块
@@ -89,19 +89,18 @@ focuslog\
 
 - 数据只写本地纯文本文件，任何一段日志都能用记事本打开审计
 - 面板服务只绑定 `127.0.0.1`（不监听局域网/公网），外部设备无法访问
-- 无遥测、无埋点、无自动更新下载；升级包来自你信任的发布渠道
+- 无遥测、无埋点、无后台联网；唯一联网动作是你**主动**双击「更新.bat」检查/下载新版（只下程序，数据从不上传）
 - 窗口标题在日志与面板中可一键脱敏（`[已脱敏]`）
 
 **资源占用**（实测，55 天数据量、双进程常驻）：
 
 | 进程 | 私有内存 | 说明 |
 |---|---|---|
-| focus_tracker（记录进程） | ~47 MB | 含跨天维护所需模块 |
-| focuspanel（面板服务） | ~49 MB | 含全量数据缓存（换来毫秒级页面） |
-| PyInstaller 引导壳 ×2 | ~3 MB | |
-| **合计** | **≈ 100 MB** | CPU：平时 0%，跨天维护时几秒 |
+| focus_tracker（记录进程） | ~16 MB | 含跨天维护/自动备份所需模块（onefile 引导壳已计入） |
+| focuspanel（面板服务） | ~47 MB | 含全量数据缓存（换来毫秒级页面） |
+| **合计** | **≈ 63 MB** | CPU：平时 0%，跨天维护/自动备份时几秒 |
 
-Python + PyInstaller 有约 40MB 的进程地板价，以上数字已贴近地板。
+Python + PyInstaller 有约 30–40MB 的进程地板价，以上数字已贴近地板。内存随日志量缓慢增长（缓存会随数据版本自动重建，不会无限膨胀）。
 页面打开速度：整页 HTML 与排行结果按"数据版本"缓存，实测 **15–70ms**。
 
 ## 反馈问题
