@@ -1,0 +1,1 @@
+perf(panel): 打开提速三件套 —— GET / 整页 HTML 按"数据版本"缓存（热路径毫秒级）；优先 Chrome --app 独立窗口直连打开（--proxy-server=direct:// + 时间戳防缓存，TUN/系统代理环境抗干扰）；服务自检/就绪轮询的 urllib 全部强制直连不走系统代理
