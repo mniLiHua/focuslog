@@ -1,3 +1,0 @@
-docs: README 面向 v3.0.0 全面重写（功能亮点/快速开始/架构与隐私/开发/双署名）；CHANGELOG 补 GitHub 账号关联
-
-git 个人数据处理同批完成：46 提交 squash 为单个干净提交，历史作者统一为 mniLiHua <mniLiHua@users.noreply.github.com>，旧 tag 已清除（私有完整历史以 bundle 形式本地留存）
