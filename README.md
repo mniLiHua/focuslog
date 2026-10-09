@@ -3,7 +3,7 @@
 > **本地 Windows 时间记录**：你在电脑上做了什么、专注了多久，一目了然。
 > 纯本地 · 零依赖（朋友免装 Python，双击就用）· 数据不联网不上传 · 全中文界面
 
-![version](https://img.shields.io/badge/version-3.1.1-4CAF50) ![license](https://img.shields.io/badge/license-GPL--3.0-blue) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![version](https://img.shields.io/github/v/release/mniLiHua/focuslog) ![license](https://img.shields.io/badge/license-GPL--3.0-blue) ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
 **作者：冰叁狼（GitHub: [mniLiHua](https://github.com/mniLiHua)）**
 

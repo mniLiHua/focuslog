@@ -1723,8 +1723,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 't' || e.key === 'T') document.getElementById('theme').click();
   if (e.key === '/'){
     e.preventDefault();
-    if (document.getElementById('tools').style.display === 'none') document.getElementById('toolBtn').click();
-    document.getElementById('q').focus();
+    // 旧代码引用了已不存在的容器 id 'tools' ⇒ 按下必抛 TypeError；改为只依赖真实存在的按钮
+    const tb = document.getElementById('toolBtn');
+    if (tb && tb.style.display !== 'none') tb.click();
+    const q = document.getElementById('q');
+    if (q) q.focus();
   }
 });
 
