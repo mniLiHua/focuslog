@@ -99,6 +99,7 @@ def _collect_key():
 
 
 _COLLECT_LOCK = __import__("threading").Lock()
+_HTML_CACHE = {"key": None, "html": None}     # 渲染好的整页 HTML，随数据版本失效
 
 
 def _collect_cached():
@@ -1098,7 +1099,13 @@ class Handler(BaseHTTPRequestHandler):
             return resp
 
         if path in ("/", "/index.html"):
-            html = DASH.build_html(DASH.collect(), server_mode=True)
+            # HTML 也按"数据版本"缓存：collect 有缓存时，打开面板是纯内存回包
+            # （90KB 拼接虽然只有几十毫秒，但叠加起来就是"转的慢"的感知来源）
+            key = _COLLECT_CACHE.get("key")
+            if key is not None and _HTML_CACHE.get("html"):
+                return self._send(200, _HTML_CACHE["html"], "text/html; charset=utf-8")
+            html = DASH.build_html(_collect_cached(), server_mode=True)
+            _HTML_CACHE["key"], _HTML_CACHE["html"] = key, html
             return self._send(200, html, "text/html; charset=utf-8")
         if path == "/download":
             rel = (parse_qs(urlparse(self.path).query).get("f") or [""])[0]
@@ -1203,8 +1210,9 @@ def main():
     # 双击「打开面板.bat」永远能看，不会报"端口被占用"。
     try:
         import urllib.request as _ur
-        with _ur.urlopen(f"http://127.0.0.1:{DEFAULT_PORT}/",
-                         timeout=5) as _r:
+        _op = _ur.build_opener(_ur.ProxyHandler({}))         # 直连：绝不让探测走系统代理
+        with _op.open(f"http://127.0.0.1:{DEFAULT_PORT}/",
+                      timeout=5) as _r:
             body = _r.read().decode("utf-8", "replace")
             fresh = "btnCheckup" in body                     # 新版页面的独有标志
         if _r.status == 200 and fresh:
@@ -1263,12 +1271,27 @@ def main():
         for _ in range(30):
             try:
                 import urllib.request as _ur2
-                _ur2.urlopen(f"http://127.0.0.1:{port}/", timeout=2)
+                _op2 = _ur2.build_opener(_ur2.ProxyHandler({}))
+                _op2.open(f"http://127.0.0.1:{port}/", timeout=2)
                 break
             except Exception:                                # noqa: BLE001
                 time.sleep(0.5)
-        if not no_open:
-            webbrowser.open(url)
+        if no_open:
+            return
+        # TUN / 系统代理环境抗干扰：优先 Chrome --app 独立窗口直连
+        # （绕开系统代理 + 时间戳防缓存 + 不污染日常标签页），找不到再退默认浏览器
+        u = url + "?t=" + str(int(time.time()))
+        for c in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                  r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                  os.path.join(os.environ.get("LOCALAPPDATA") or "",
+                               "Google", "Chrome", "Application", "chrome.exe")):
+            try:
+                if c and os.path.exists(c):
+                    subprocess.Popen([c, "--app=" + u, "--proxy-server=direct://"])
+                    return
+            except Exception:                                # noqa: BLE001
+                continue
+        webbrowser.open(u)
     threading.Thread(target=_open_when_ready, daemon=True).start()
 
     # UX：服务一起来就在后台把全量数据算好，浏览器打开时永远是热数据。
