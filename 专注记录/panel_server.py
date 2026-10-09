@@ -21,6 +21,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -687,6 +688,113 @@ def backup_config_payload(payload=None):
     return {"ok": True, "backup": BU.load_cfg(), "default_dir": BU.default_dir()}
 
 
+PRESET_DIR = os.path.normpath(os.path.join(os.path.dirname(SCRIPT_DIR), "分类方案"))
+PII_RE = re.compile(r"1[3-9]\d{9}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def presets_list():
+    """分类方案\ 目录下的方案文件清单"""
+    try:
+        files = sorted(f for f in os.listdir(PRESET_DIR)
+                       if f.endswith(".txt") and f != "README.md")
+    except OSError:
+        files = []
+    return {"ok": True, "items": files,
+            "dir": os.path.basename(os.path.dirname(PRESET_DIR))}
+
+
+def _preset_text(payload):
+    name = str(payload.get("name") or "").strip()
+    text = str(payload.get("text") or "")
+    if name:
+        if "/" in name or ".." in name:
+            return ""
+        fp = os.path.join(PRESET_DIR, name)
+        if not os.path.isfile(fp):
+            return ""
+        return io.open(fp, encoding="utf-8", errors="replace").read()
+    return text
+
+
+def preset_scan(payload):
+    """解析社区方案：只产出"预览"，绝不写文件。
+
+    增量即默认：与用户现状一致的规则忽略；用户已有归属的规则标为冲突并跳过；
+    方案内部互斥（同一规则指向两个分类）标为互斥并跳过。
+    """
+    text = _preset_text(payload)
+    if not text.strip():
+        return {"ok": False, "message": "方案内容为空（选择内置方案或粘贴文本）"}
+    pii = bool(PII_RE.search(text))
+    cats = S.load_categories(DASH.CAT_FILE)
+    owner = {}
+    for name, rules in cats.items():
+        for r in rules:
+            owner[f"{r[0]}={r[1]}"] = name
+    add, conflict, bad = [], [], []
+    seen = {}
+    for raw in text.splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        if "|" not in s:
+            bad.append(s[:40])
+            continue
+        name, rules_s = s.split("|", 1)
+        focus = name.startswith("#专注#")
+        name = name.replace("#专注#", "").strip()
+        for r in [x.strip() for x in rules_s.split(",") if x.strip()]:
+            m = re.match(r"^(proc|title)=(.+)$", r)
+            if not m:
+                bad.append(r[:40])
+                continue
+            key = f"{m.group(1)}={m.group(2)}"
+            prev = seen.get(key)
+            if prev and prev[0] != name:
+                conflict.append({"rule": key,
+                                 "cats": f"{prev[0]} / {name}",
+                                 "note": "方案内部互斥：同一规则指向两个分类"})
+                continue
+            seen[key] = (name, focus)
+            mine = owner.get(key)
+            if mine == name:
+                continue                                  # 与用户现状一致，无需动作
+            if mine:
+                conflict.append({"rule": key, "cats": f"{mine} / {name}",
+                                 "note": "你已有该规则的归类，增量模式将跳过"})
+            else:
+                add.append({"cat": name, "rule": key, "focus": focus})
+    return {"ok": True, "pii": pii,
+            "add": add, "conflict": conflict, "bad": bad,
+            "message": f"新增 {len(add)} · 冲突跳过 {len(conflict)} · 无法解析 {len(bad)}"}
+
+
+def preset_apply(payload):
+    """只导入预览中的新增项（前端只回传 add 列表，冲突项根本到不了这里）"""
+    adds = payload.get("adds") or []
+    if not adds:
+        return {"ok": True, "message": "没有可导入的新增项"}
+    cats = S.load_categories(DASH.CAT_FILE)
+    ok_n, cat_new = 0, False
+    for a in adds:
+        cat, rule = str(a.get("cat") or ""), str(a.get("rule") or "")
+        if not cat or "=" not in rule:
+            continue
+        k, v = rule.split("=", 1)
+        try:
+            is_new = cat not in cats
+            cat_new = cat_new or is_new
+            if S._append_category_rule(cat, v, is_new=is_new,
+                                       is_focus=bool(a.get("focus"))):
+                ok_n += 1
+            cats.setdefault(cat, [])
+        except Exception:                                    # noqa: BLE001
+            continue
+    return {"ok": True,
+            "message": f"已增量导入 {ok_n} 条规则（你的现有归类未动）"
+                       + ("；新分类已创建" if cat_new else "")}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "FocusLogPanel/2.9"
 
@@ -825,6 +933,23 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/backup_config":
             try:
                 return self._send(200, backup_config_payload(payload))
+            except Exception as e:                       # noqa: BLE001
+                return self._send(500, {"ok": False,
+                                        "message": f"{type(e).__name__}: {e}"})
+
+        if path == "/api/presets_list":
+            return self._send(200, presets_list())
+
+        if path == "/api/preset_scan":
+            try:
+                return self._send(200, preset_scan(payload))
+            except Exception as e:                       # noqa: BLE001
+                return self._send(500, {"ok": False,
+                                        "message": f"{type(e).__name__}: {e}"})
+
+        if path == "/api/preset_apply":
+            try:
+                return self._send(200, preset_apply(payload))
             except Exception as e:                       # noqa: BLE001
                 return self._send(500, {"ok": False,
                                         "message": f"{type(e).__name__}: {e}"})

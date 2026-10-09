@@ -382,6 +382,7 @@ HTML = r"""<!DOCTYPE html>
       <button class="tab" data-tab="import">导入旧数据</button>
       <button class="tab" data-tab="sys">系统设置</button>
       <button class="tab" data-tab="about">关于</button>
+      <button class="tab" data-tab="presets">方案专区</button>
     </div>
 
     <div id="tab-assist">
@@ -444,6 +445,20 @@ HTML = r"""<!DOCTYPE html>
     </div>
 
     <div id="tab-about" style="display:none"><div id="aboutBox"></div></div>
+    <div id="tab-presets" style="display:none">
+      <div class="tip" style="margin:0 0 8px">
+        导入<b>社区分享的分类方案</b>。<b>增量模式</b>：你已归类的规则一律保持不变，
+        只添加你没有的规则；方案内部互斥的规则会跳过并列出来。</div>
+      <div class="row">
+        <select id="presetSel" style="min-width:200px"><option value="">—— 选择内置方案 ——</option></select>
+        <button class="btn" id="btnPresetLoad">载入选中方案</button>
+        <button class="btn primary" id="btnPresetScan">解析预览</button>
+        <button class="btn primary" id="btnPresetApply" disabled>只导入新增项</button>
+      </div>
+      <textarea id="presetText" style="width:100%;min-height:150px;margin-top:8px;
+        font-family:monospace;font-size:12px" placeholder="或直接粘贴方案内容（category.txt 格式）"></textarea>
+      <div id="presetResult" style="margin-top:10px"></div>
+    </div>
 
     <div class="out" id="toolOut"></div>
   </div>
@@ -977,12 +992,13 @@ async function api(path, body){
 document.querySelectorAll('.tab').forEach(tb => tb.onclick = async () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === tb));
   const which = tb.dataset.tab;
-  ['assist', 'manage', 'import', 'sys', 'about'].forEach(k => {
+  ['assist', 'manage', 'import', 'sys', 'about', 'presets'].forEach(k => {
     document.getElementById('tab-' + k).style.display = (k === which) ? 'block' : 'none';
   });
   if (which === 'manage') await loadCats();
   if (which === 'sys') await loadSys();
   if (which === 'about') await loadAbout();
+  if (which === 'presets') await loadPresetList();
 });
 
 async function loadCats(){
@@ -1256,6 +1272,55 @@ function drawCatTrend(){
   box.innerHTML = `<div class="tip" style="margin:0 0 6px">${esc(trendCat)} · 近 30 天（峰值 ${hm(max)}）</div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">
       <line x1="0" y1="72.5" x2="${W}" y2="72.5" stroke="var(--line)"></line>${g}</svg>`;
+}
+
+/* ---------- 方案专区：社区方案增量导入（两段式，绝不覆盖用户现状） ---------- */
+let PRESET_LAST = null;
+async function loadPresetList(){
+  if (!SERVER) return;
+  const sel = document.getElementById('presetSel');
+  sel.innerHTML = '<option value="">—— 选择内置方案 ——</option>';
+  try {
+    const r = await fetch('/api/presets_list').then(x => x.json());
+    (r.items || []).forEach(f => {
+      const o = document.createElement('option');
+      o.value = f; o.textContent = f;
+      sel.appendChild(o);
+    });
+  } catch(e){}
+}
+document.getElementById('btnPresetLoad').onclick = async () => {
+  const v = document.getElementById('presetSel').value;
+  if (!v){ out.textContent = '先选择一个内置方案'; return; }
+  await presetPreview({name: v});
+};
+document.getElementById('btnPresetScan').onclick = () => presetPreview(
+  {text: document.getElementById('presetText').value});
+document.getElementById('btnPresetApply').onclick = async (e) => {
+  if (!PRESET_LAST || !PRESET_LAST.add || !PRESET_LAST.add.length) return;
+  e.target.disabled = true;
+  const r = await api('/api/preset_apply', {adds: PRESET_LAST.add});
+  out.textContent = r.message || '';
+  await presetPreview({text: document.getElementById('presetText').value});
+  e.target.disabled = false;
+};
+async function presetPreview(payload){
+  const box = document.getElementById('presetResult');
+  box.innerHTML = '<div class="tip">解析中…</div>';
+  const r = await api('/api/preset_scan', payload);
+  PRESET_LAST = r.ok ? r : null;
+  document.getElementById('btnPresetApply').disabled = !(r.ok && r.add && r.add.length);
+  if (!r.ok){ box.innerHTML = `<div class="tip">${esc(r.message || '')}</div>`; return; }
+  const rows = a => a.map(x => `<tr><td style="width:42%">${esc(x.rule || x)}</td>
+      <td>${esc(x.cats || x.note || '')}</td></tr>`).join('');
+  box.innerHTML = `${r.pii ? '<div class="bar bad"><b>⚠ 该方案疑似包含手机号/邮箱</b> —— 请提醒贡献者先脱敏</div>' : ''}
+    <div class="tip">${esc(r.message)}</div>
+    ${r.add.length ? `<div class="tip"><b>将新增（${r.add.length}）：</b></div>
+      <table><tbody>${r.add.map(x => `<tr><td style="width:30%"><b>${esc(x.cat)}</b>${x.focus ? ' (专注)' : ''}</td>
+        <td>${esc(x.rule)}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${r.conflict.length ? `<div class="tip" style="margin-top:8px"><b>冲突跳过（${r.conflict.length}）：</b></div>
+      <table><tbody>${rows(r.conflict)}</tbody></table>` : ''}
+    ${r.bad.length ? `<div class="tip" style="margin-top:8px"><b>无法解析（${r.bad.length}）：</b>${esc(r.bad.join('；'))}</div>` : ''}`;
 }
 
 /* ---------- 关于 ---------- */
