@@ -41,6 +41,7 @@ desktop.ini
 
 # 打包 / 发布 / 更新产生的目录与产物
 _build/
+_scratch/
 _release/
 _backup_*/
 FocusLog_*.zip
