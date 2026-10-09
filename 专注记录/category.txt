@@ -1,0 +1,41 @@
+# ==============================================================
+#  窗口分类配置 — 匹配顺序 = 文件行序（从上到下依次匹配，先命中先生效）
+# ==============================================================
+#  规则格式:  分类名|规则1,规则2,...
+#  规则类型:  proc=进程名    精确匹配进程名（不区分大小写）
+#             title=关键词   窗口标题包含该关键词（不区分大小写）
+#  专注标记:  行首加 #专注# 表示该分类算作"专注时长"
+#  空行和 # 开头的注释行将被忽略（但 #专注#xx 是有效规则行，不是注释）
+#
+#  匹配优先级（本机实测调优，2026-09-21 基于 4 个月真实日志）：
+#    游戏 → 办公(专注) → 学习(专注) → 工具(专注) → 视频 → 音乐 → 浏览器 → 通讯 → 系统
+#    · 学习/视频必须在浏览器前面，否则浏览器内的学习/视频会被浏览器规则抢先命中
+#    · 优化后未分类占比从 27.9% 降到 ~3%
+# ==============================================================
+
+# ----- 游戏 (非专注) — 放最前，进程名独特不会误吸办公类 -----
+游戏|proc=mjs.exe,proc=Minecraft.Windows.exe,proc=steam.exe,proc=steamwebhelper.exe,proc=UAGame.exe,proc=Nomad Drive Demo.exe,proc=ShiftAtMidnight.exe,proc=How to Fish.exe,proc=REPO.exe,proc=Machine Party.exe,proc=Supermarket Together.exe,proc=Bang Bang Barrage.exe,proc=Backrooms-Win64-Shipping.exe,proc=GameViewer.exe,proc=Plain Craft Launcher 2.exe,proc=Shape of Dreams.exe,proc=Steam++.exe,proc=ca_launcher.exe,proc=FeverGamesInstaller.exe,title=名将杀,title=Minecraft,title=落幕曲,title=以撒,title=杀戮尖塔,title=洛克王国,title=Steam入库,title=Watt Toolkit,title=发烧游戏
+
+# ----- 办公 (专注) -----
+#专注#办公|proc=Code.exe,proc=devenv.exe,proc=notepad++.exe,proc=WPS.exe,proc=wps.exe,proc=et.exe,proc=wpp.exe,proc=excel.exe,proc=WINWORD.EXE,proc=POWERPNT.EXE,proc=Typora.exe
+
+# ----- 学习 (专注) — 必须在浏览器前 -----
+#专注#学习|proc=Anki.exe,title=粉笔,title=华图,title=中公,title=八年级,title=九年级,title=物理,title=数学,title=浮力,title=电功率,title=因式分解,title=二次函数,title=不等式,title=王婕
+
+# ----- 工具 (专注) — WorkBuddy 是本机主力生产力工具 -----
+#专注#工具|proc=WorkBuddy.exe,proc=Snipaste.exe,proc=Everything.exe,proc=calc.exe,proc=notepad.exe,title=CodeBuddy,title=WorkBuddy
+
+# ----- 视频 (非专注) — 必须在浏览器前，优先拦截视频网站 -----
+视频|proc=mplayerc.exe,proc=vlc.exe,proc=哔哩哔哩.exe,title=哔哩哔哩,title=bilibili,title=YouTube,title=优酷,title=腾讯视频,title=爱奇艺
+
+# ----- 音乐 (非专注) -----
+音乐|proc=KuGou.exe,proc=CloudMusic.exe,proc=QQMusic.exe,title=酷狗音乐,title=网易云音乐
+
+# ----- 浏览器 (非专注) — 不加专注标记，靠上方 title 规则精确判断 -----
+浏览器|proc=chrome.exe,proc=firefox.exe,proc=msedge.exe
+
+# ----- 通讯 (非专注) -----
+通讯|proc=WeChat.exe,proc=Weixin.exe,proc=WeChatAppEx.exe,proc=QQ.exe,proc=TIM.exe,proc=KOOK.exe,proc=Discord.exe
+
+# ----- 系统 (非专注) — 放最后兜底 -----
+系统|proc=explorer.exe,proc=SearchUI.exe,proc=Taskmgr.exe,proc=cmd.exe,proc=WindowsTerminal.exe,proc=LockApp.exe,proc=ApplicationFrameHost.exe,proc=java.exe,proc=python.exe,proc=pythonw.exe,proc=ShellExperienceHost.exe,proc=HipsTray.exe,proc=GHelper.exe,proc=System Idle Process,proc=[RESUME],title=自动恢复,title=G-Helper,title=网络连接
