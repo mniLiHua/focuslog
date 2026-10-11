@@ -49,7 +49,9 @@ IDLE_TIMEOUT = 300          # 鼠标空闲超时（秒），超过此时间无�
 VIDEO_IDLE_TIMEOUT = 2700   # 视频/电影窗口的空闲超时（秒）= 45 分钟（v2.7.2：原 120 分钟会虚增在线时长）
 # 视频类判断规则：进程名 或 标题关键词（匹配任一则不暂停）
 VIDEO_PROCS = {"mplayerc.exe", "vlc.exe"}
-VIDEO_TITLE_KEYWORDS = ("bilibili", "哔哩哔哩", "youtube", "优酷", "爱奇艺", "腾讯视频", "芒果tv", "netflix", "twitch")
+# 「时钟」是 UWP 应用（进程恒为 ApplicationFrameHost.exe，按进程名会误伤计算器/设置等），
+# 故按窗口标题匹配；Windows 时钟应用的窗口标题就是"时钟"（秒表/计时器页标题不变）。
+VIDEO_TITLE_KEYWORDS = ("时钟", "bilibili", "哔哩哔哩", "youtube", "优酷", "爱奇艺", "腾讯视频", "芒果tv", "netflix", "twitch")
 # 专注里程碑（分钟, 提示语）
 MILESTONES = [
     (60,  "专注1小时达成！"),
