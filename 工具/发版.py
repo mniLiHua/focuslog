@@ -137,7 +137,9 @@ def main():
         return 0
 
     code, out = sh("git push -f origin main --follow-tags")
-    if "->" not in out:
+    # 代码已在远端时 git 只回一句 "Everything up-to-date"（没有 "->"），那不是失败：
+    # 否则「补发 Release / 重跑本脚本」会在这一步被卡死（v3.2.1 补发时踩过）。
+    if code != 0 or ("->" not in out and "up-to-date" not in out and "最新" not in out):
         print(out[-300:])
         raise SystemExit("[X] git push 失败")
     print("[7] push ✓")
