@@ -2,39 +2,37 @@
 # Copyright (C) 2026 冰叁狼  |  SPDX-License-Identifier: GPL-3.0-only
 # 本程序按 GPL-3.0 授权：可自由使用/修改/再分发，衍生作品须同协议开源。
 # -*- coding: utf-8 -*-
-"""
-窗口焦点监控脚本  v2.7
-每10秒采样一次当前活跃窗口（进程名 + 标题），写入当天日期txt文件
-支持鼠标空闲自动暂停：鼠标5分钟不动且焦点不在视频类窗口时自动暂停记录
-支持锁屏/休眠自动暂停：锁屏瞬间即停表，解锁后自动恢复并写日志标记
-支持专注时长统计：根据 category.txt 中 #专注# 标记的分类判断是否专注
-支持里程碑通知：专注时长达到阈值时弹出系统通知
-实时更新 today_focus.txt：文件名包含专注时长，桌面一眼可见
-用 pythonw.exe 运行无窗口后台，手动停止
+r"""
+窗口焦点监控程序（FocusLog 的「计时程序」）
+每 10 秒采样一次当前前台窗口（进程名 + 标题），追加写入 专注记录\YYYY-MM-DD.txt。
+程序版本以根目录 VERSION.txt 为准，历次改动见 docs\CHANGELOG.md；
+下面这份清单只记「计时口径」这类一改就坏的设计约束（不是版本历史，别再往这里堆版本号）。
 
-v2.6 新增（在 v2.5 基础上）：
-  · 日志「点压缩」——同一窗口连续采样只记一行 + 省略号，日志体积降约 85%
-  · 隐私脱敏 —— 命中小抄表窗口（密码管理器/聊天软件等）的标题替换为 [已脱敏]
-
-v2.7 新增（在 v2.6 基础上）：
-  · 锁屏 / 休眠自动暂停 —— OpenInputDesktop 探测，锁屏即停表，解锁即复表
-  · 打包为无控制台窗口（WINDOWS_GUI），后台运行不弹黑框
+计时口径（改之前先想清楚，这几条都是刻意的）：
+  · 时长按【真实经过时间】累加，不是每轮固定 +10s（循环耗时/系统卡顿会让在线时长偏慢）
+  · 活跃判据 = 鼠标位移 或 系统有键鼠输入（GetLastInputInfo）⇒ 纯键盘工作不算离开
+  · 非活跃期间的秒数先挂缓冲区，只有「键鼠恢复」才结算 ⇒ 闲置不计入在线时长
+  · 锁屏 / 休眠用 OpenInputDesktop 秒级停表（[LOCK] / [UNLOCK]，优先级高于空闲超时）
+  · 视频类窗口放宽到 VIDEO_IDLE_TIMEOUT（45 分钟）；UWP 宿主进程名不可靠 ⇒ 按标题匹配
+  · 日志点压缩（同一窗口连续采样写 "."）+ 敏感标题脱敏（[已脱敏]）
+  · 跨天自动维护：派发 summary --maintain 子进程（v3.1.0 起子进程化，省常驻内存）
+  · 每周自动备份 + 每日目标 / 单应用上限提醒（goals.json 改动一分钟内热生效）
+  · 单实例文件锁；运行中每 5 分钟自检其它路径的旧版实例（[DUP]），防双份日志
+  · 实时把「专注X_在线Y.txt」写在数据目录根下（面板也读它）
 """
 
 import os
 import sys
-import io
 import json
 import ctypes
 import ctypes.wintypes
 import time
 import traceback
-import contextlib
+import subprocess
 import datetime
 import atexit
 import psutil
 from category_utils import load_categories, is_focus_window
-import backup_utils
 import backup_utils
 
 # ============ 配置 ============
@@ -335,8 +333,13 @@ def archive_old_focus_file(date_str, focus_seconds, total_seconds):
             pass
 
 
-def check_milestones(focus_seconds, state):
-    """检查专注里程碑，达标时弹通知并标记"""
+def check_milestones(focus_seconds, state, log_file, time_str):
+    """检查专注里程碑，达标时弹通知并标记
+
+    log_file / time_str 只用于异常留痕：v3.2.1 之前这里直接引用了同名变量，
+    但它们其实是 main() 里的局部名 ⇒ 弹窗一旦失败，本该"留痕"的 except
+    自己抛 NameError，把整个主循环一起带走。
+    """
     for minutes, message in MILESTONES:
         key = f"milestone_{minutes}"
         if key not in state:
@@ -459,12 +462,17 @@ def check_goals(focus_seconds, state, goals):
                         "（不想要这类提醒：面板 → ⚙ 工具 → 系统设置 → 关掉「弹窗提醒」）")
 
 def run_daily_maintenance(log_file, time_str):
-    """跨天自动维护：归档 → 重算深耕 → 导出统计（+周一自动周报）
+    r"""跨天自动维护：归档 → 重算深耕 → 导出统计（+周一自动周报）
 
     v3.1.0：改为派发独立 summary 进程（--maintain）跑完即退。
     为什么：此前在本进程内 import summary 全家（含图表/统计），只为一年
     几次的维护就常驻 ~25MB 内存；子进程化后常驻内存立减。
     输出落 专注记录\maintenance.log；失败不影响记录。
+
+    v3.2.1：补上漏掉的 import subprocess —— 子进程化那次重构没带上它，
+    于是每天跨天都走 except 分支写「[MAINTAIN]|派发失败 name 'subprocess'
+    is not defined」，维护其实一次都没真跑过（2026-10-11~10-13 日志可证）。
+    这里少 import 是「静默降级」：不报错、不弹窗，只是自动化再也不发生。
     """
     try:
         if getattr(sys, "frozen", False):
@@ -733,7 +741,7 @@ def main():
         if now_time - last_save_time >= 60:
             state["focus_seconds"] = focus_seconds
             state["total_seconds"] = total_seconds
-            check_milestones(focus_seconds, state)
+            check_milestones(focus_seconds, state, log_file, time_str)
             try:                       # goals.json 被改动就热重载
                 mt = os.path.getmtime(GOALS_FILE)
                 if mt != goals_mtime:
