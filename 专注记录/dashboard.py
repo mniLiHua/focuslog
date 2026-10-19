@@ -1018,7 +1018,7 @@ async function loadCats(){
   try {
     const r = await api('/api/categories');
     ALLCAT = r;
-    const un = (r.procs || []).filter(p => !p.cat).length;
+    const un = (r.procs || []).filter(p => !p.cat || p.cat === '未分类').length;
     hint.textContent = `共 ${r.cats.length} 个分类 / ${r.procs.length} 个进程`
       + `（其中还没归类的 ${un} 个）`
       + (r.dup && r.dup.length ? `　⚠ 重复分类名：${r.dup.join('、')}` : '');
@@ -1032,7 +1032,7 @@ function assistRows(){
   if (!ALLCAT) return [];
   const onlyUn = !document.getElementById('showAll').checked;
   const q = document.getElementById('q').value.trim().toLowerCase();
-  let rows = ALLCAT.procs.filter(r => !onlyUn || !r.cat);
+  let rows = ALLCAT.procs.filter(r => !onlyUn || !r.cat || r.cat === '未分类');
   if (q) rows = rows.filter(r => r.proc.toLowerCase().includes(q));
   const by = document.getElementById('sortBy').value;
   rows.sort((a,b) => {
